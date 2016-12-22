@@ -1,0 +1,76 @@
+In this project, I implemented my own "application" layer routing protocol that implements distance vector routing which uses Bellman-Ford algorithm. To do so, I created a TCP connection with the next hop neighbors and exchange the routing information with my neighbors periodically until it converges.
+
+I tested the program on a network simulator mininet.
+
+There are the following important files to be considered for this project:
+		- source files and .bgp files, inside the folder BGPLite- source code, including:
+			- LinkInfo.java: This file contains the information about the link in the network. Later, as the algorithm goes forward, it will keep track of the partial information about the possible optimal path. So, it contains the following data members:
+
+				String dst; // which means we can reach to which router/host as destination of the path
+				String from; // which means if we want to take this path, what is the immediate next node
+				int weight; // what is the weight of the next immediate edge if taking this path
+
+			- RouterInfo.java: This file contains the information about the router in the network. So, it contains the following data members:
+			
+				int number; // which is 4 in router r4 or 2 in router r2
+				String ip; // which is the ip address of the router which is facing the other router in the link.
+
+			- Router.java:
+			
+				This file contains the main class of this part of the assignment. The class Router, contains the following data members:
+					String name; // this is the name of the router, e.g., r1 or r4
+					boolean isAlreadySent; // used for synchronization between the threads
+					Lock lock; // used with the previous data member for the synchronization purposes
+
+					List<LinkInfo> routingTable; // This data member is the heart of the router which has the routing table information
+
+					Map<String, String> neighbors; // This data member contains the mapping of the ip of the direct neighbors of the router with their names !!
+
+					Map<String, Integer> neighborsWeight; // This data member contains the mapping of the name of the immediate neighbor with its cost to reach.
+
+				This class, also has the following important functions:
+					- void fillInitialRoutingTableAndNeighbors(String fileName): In this function, the .bgp is read and the routingTable, neighbors and neighborsWeight data members are filled with the corresponding information. The format of .bgp is as follows: in each line, you have the information of each link which is connected to the router. Each part of the information is separated with $, for example, for router r2, the r2.bgp file is as follows:
+
+						r4$r4$-4$router$172.0.4.2
+						r1$r1$#$router$172.0.2.1
+
+						The first component is the dst part of the link. The second component is the from part of the the link (which initially it is the same as dst component). The third component is the cost or weight of the link. the Fourth component determines whether the link reaches other router or a host and finally, the last component is the ip address of the neighbor node.
+
+						NOTE that here, for the router r1 which is a neighbor of r2, the cost is #. the character # is used in case, the router is the neighbor however, it is not reachable! So, since the links are not bi-directional, as professor said, I considered it this way to be able to go forward in the implementation.
+
+					It is worth mentioning that, since different threads can update the aforementioned data members (routingTable, neighbors and neighborsWeight), they are wrapped around the Collections.synchronizedMap facility of Java.
+
+					- void broadcast(List<LinkInfo> routingTable): This function is responsible for broadcating the routing table passed to this function.
+
+					- The constructor of the class: which is the most important method of the class. (@line 37) It calls the function fillInitialRoutingTableAndNeighbors to initialize the data members correctly. Then, (@line 42) it makes a new thread and passes an object of type RouterEar to call its run method. Then, (@line 44) it goes to sleep for some time and then, (@line 48) broadcasts its routing table to all its neighbors, if it hasn't updated its routing table and it hasn't sent its routing table to its neighbors.
+
+
+			- RouterEar.java
+				This class implements Runnable. Hence, it is possible for its run method to be executed in a new thread. So, the main method to be explained here is run() method which make a socket on port 8000 and listens for the new updates. For any new updates, it creates an object of type RTUpdater and spawns the thread to execute the run method of that object to deal with the new updates received.
+
+
+				<C1-b> CONVERGENCE TIME CALCULATION: In order to calculat the convergence time, in the first line of the run method of RouterEar (which listens for the updates), I recorded the start_time. Then, in case of any update, I pass this information to the object of RTUpdater (as the last argument of the constructor of this class). So, in the run method of the class RTUpdater, after getting the updated routing table and updating its own routing table, BEFORE DETERMINING [possibly] BROADCASTING the updated routing table, I recorded the time as the end time and print the time difference. In the figures (routerX-log.jpg), described below, you will see the convergence time for each of the nodes.
+
+			- RTUpdater.java
+				This class also implements Runnable. Hence, it is also possible for its run method to be executed in a new thread. In its run method, it gets the new updated routing table from its neighbor, then, by using the updated information, it tries to update its own routing table (lines 61 to 82) and in case, it gets updated, it sends its own updated routing table to its neighbors.
+			
+			- Makefile
+				This file contains the command to compile the java program.
+				In order to run the executable on the machines, you can do so by the command "java Router ROUTER NAME INIT-ROUTING-TABLE-FILE". E.g., router r1, "java Router ROUTER r1 r1.bgp"
+
+			- X.bgp files which I have designed to be read by the program and initialize the data members.
+
+		- routerX-log_CY.jpg where X can be {1, 2, 3, 4} and Y can be {1, 2}. So, the figures routerX-log_C1.jpg shows the log of the execution of the simulation on the mininet. <C1-c> It also shows the ultimate application layer routing table. Based on what is observed:
+			- The convergence time for R1 is: 9424 milli-seconds
+			- The convergence time for R2 is: 10802 milli-seconds
+			- The convergence time for R1 is: 8864 milli-seconds
+			- The convergence time for R1 is: 10030 milli-seconds
+
+	PART C2:
+		Figures routerX-log_C2.jpg (where X can be 1, 2, 3 or 4) show the convergence time after changing the cost of R1-->R3 from 6 to 1. Based on what is observed:
+			- The convergence time for R1 is: 9283 milli-seconds.
+			- The convergence time for R2 is: 10544 milli-seconds.
+			- The convergence time for R3 is: 10995 milli-seconds.
+			- The convergence time for R4 is: 9553 milli-seconds.
+
+		<C2-b> the figres show the ultimate application layer routing table.
